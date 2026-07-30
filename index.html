@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sentence Mastery Drill</title>
+  <style>
+    :root {
+      --bg-color: #f4f6f9;
+      --card-bg: #ffffff;
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --success: #10b981;
+      --error: #ef4444;
+      --text-main: #1f2937;
+      --text-muted: #6b7280;
+      --border-color: #e5e7eb;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; }
+    body { background-color: var(--bg-color); color: var(--text-main); display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 1rem; }
+    
+    .container { width: 100%; max-width: 600px; background: var(--card-bg); border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01); padding: 2rem; position: relative; overflow: hidden; }
+    .hidden { display: none !important; }
+
+    /* Setup Screen */
+    h1 { font-size: 1.5rem; margin-bottom: 0.5rem; font-weight: 700; text-align: center; }
+    p.subtitle { text-align: center; color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+    textarea { width: 100%; height: 220px; padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color); font-family: monospace; font-size: 0.85rem; resize: vertical; margin-bottom: 1rem; }
+    .button-group { display: flex; gap: 0.75rem; }
+    button { flex: 1; padding: 0.85rem; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; font-size: 0.95rem; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-secondary { background: #e0e7ff; color: var(--primary); }
+    .btn-secondary:hover { background: #c7d2fe; }
+
+    /* Progress Header */
+    .progress-bar-container { width: 100%; background: #e5e7eb; height: 10px; border-radius: 5px; overflow: hidden; margin-bottom: 1.5rem; }
+    .progress-bar { height: 100%; background: var(--primary); width: 0%; transition: width 0.3s ease; }
+    .stats-header { display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem; font-weight: 600; }
+
+    /* Word Card */
+    .word-card { text-align: center; background: #f9fafb; padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color); margin-bottom: 1.5rem; }
+    .chinese-word { font-size: 3rem; font-weight: 800; color: var(--text-main); line-height: 1.2; margin-bottom: 0.25rem; }
+    .pinyin { font-size: 1.25rem; color: var(--primary); font-weight: 500; margin-bottom: 0.5rem; }
+    .badge { display: inline-block; background: #e0e7ff; color: var(--primary); font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.8rem; }
+
+    /* Grid Options */
+    .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem; }
+    .option-btn { background: white; border: 2px solid var(--border-color); color: var(--text-main); padding: 1rem; border-radius: 10px; font-weight: 500; min-height: 70px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 0.9rem; line-height: 1.3; }
+    .option-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); background: #f8fafc; }
+    .option-btn.correct { background: var(--success) !important; color: white !important; border-color: var(--success) !important; }
+    .option-btn.wrong { background: var(--error) !important; color: white !important; border-color: var(--error) !important; }
+
+    /* Feedback Banner */
+    .feedback { height: 28px; text-align: center; font-weight: 600; font-size: 0.95rem; margin-bottom: 0.5rem; }
+    .feedback.success-text { color: var(--success); }
+    .feedback.error-text { color: var(--error); }
+
+    /* Victory Screen */
+    .victory { text-align: center; padding: 2rem 1rem; }
+    .victory h2 { font-size: 2rem; color: var(--success); margin-bottom: 0.5rem; }
+    .victory p { color: var(--text-muted); margin-bottom: 1.5rem; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <!-- SETUP SCREEN -->
+  <div id="setup-screen">
+    <h1>Chinese Sentence Drill</h1>
+    <p class="subtitle">Paste the JSON array output from your AI prompt below to begin.</p>
+    <textarea id="json-input" placeholder='Paste JSON here...'></textarea>
+    <div class="button-group">
+      <button class="btn-secondary" onclick="loadSampleData()">Load Sample Data</button>
+      <button class="btn-primary" onclick="startExercise()">Start Exercise</button>
+    </div>
+  </div>
+
+  <!-- DRILL SCREEN -->
+  <div id="drill-screen" class="hidden">
+    <div class="stats-header">
+      <span id="words-mastered-text">Mastered: 0 / 0</span>
+      <span id="overall-progress-text">0% Complete</span>
+    </div>
+    <div class="progress-bar-container">
+      <div id="overall-progress-bar" class="progress-bar"></div>
+    </div>
+
+    <div class="word-card">
+      <div id="chinese-word" class="chinese-word">--</div>
+      <div id="pinyin" class="pinyin">--</div>
+      <span id="word-progress-badge" class="badge">Mastery: 0 / 10</span>
+    </div>
+
+    <div class="feedback" id="feedback"></div>
+
+    <div id="options-grid" class="options-grid">
+      <!-- 4 Option buttons dynamic insertion -->
+    </div>
+
+    <button style="margin-top: 1rem; background: transparent; color: var(--text-muted); font-size: 0.8rem;" onclick="resetToSetup()">← Change Sentence</button>
+  </div>
+
+  <!-- VICTORY SCREEN -->
+  <div id="victory-screen" class="hidden victory">
+    <h2>🎉 Challenge Complete!</h2>
+    <p>You have mastered every single word in this sentence 10 times!</p>
+    <button class="btn-primary" onclick="resetToSetup()">Try Another Sentence</button>
+  </div>
+</div>
+
+<script>
+  let drillData = [];
+  let currentItem = null;
+  let isAnswerLocked = false;
+
+  const sampleJSON = [
+    {
+      "word": "全力",
+      "pinyin": "quán lì",
+      "correct": "with all one's strength / full force",
+      "distractors": ["with extreme speed", "with complete focus", "with maximum caution"]
+    },
+    {
+      "word": "奔跑",
+      "pinyin": "bēn pǎo",
+      "correct": "to run quickly / to sprint",
+      "distractors": ["to walk hurriedly", "to jump repeatedly", "to rush forward aimlessly"]
+    },
+    {
+      "word": "同时",
+      "pinyin": "tóng shí",
+      "correct": "at the same time / simultaneously",
+      "distractors": ["immediately after", "in a short period", "from time to time"]
+    },
+    {
+      "word": "精细",
+      "pinyin": "jīng xì",
+      "correct": "fine / delicate / detailed",
+      "distractors": ["bright and colorful", "complex and difficult", "neat and organized"]
+    },
+    {
+      "word": "咒语",
+      "pinyin": "zhòu yǔ",
+      "correct": "incantation / spell",
+      "distractors": ["secret riddle", "whispered rumor", "ancient proverb"]
+    }
+  ];
+
+  function loadSampleData() {
+    document.getElementById('json-input').value = JSON.stringify(sampleJSON, null, 2);
+  }
+
+  function startExercise() {
+    const inputStr = document.getElementById('json-input').value.trim();
+    if (!inputStr) {
+      alert("Please paste valid JSON data first!");
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(inputStr);
+      if (!Array.isArray(parsed) || parsed.length === 0) throw new Error("Format must be an array");
+
+      drillData = parsed.map(item => ({
+        word: item.word,
+        pinyin: item.pinyin,
+        correct: item.correct,
+        distractors: item.distractors || [],
+        score: 0 // Target is 10
+      }));
+
+      document.getElementById('setup-screen').classList.add('hidden');
+      document.getElementById('victory-screen').classList.add('hidden');
+      document.getElementById('drill-screen').classList.remove('hidden');
+
+      loadNextWord();
+    } catch (err) {
+      alert("Invalid JSON structure! Please make sure your output matches the prompt standard.");
+    }
+  }
+
+  // Fisher-Yates Shuffle Algorithm
+  function shuffleArray(array) {
+    const arr = [...array];
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  function loadNextWord() {
+    isAnswerLocked = false;
+    document.getElementById('feedback').textContent = '';
+    document.getElementById('feedback').className = 'feedback';
+
+    // Get all words with score < 10
+    const unmastered = drillData.filter(item => item.score < 10);
+
+    if (unmastered.length === 0) {
+      // Victory
+      document.getElementById('drill-screen').classList.add('hidden');
+      document.getElementById('victory-screen').classList.remove('hidden');
+      return;
+    }
+
+    // Pick a word randomly from unmastered words
+    currentItem = unmastered[Math.floor(Math.random() * unmastered.length)];
+
+    // Render word info
+    document.getElementById('chinese-word').textContent = currentItem.word;
+    document.getElementById('pinyin').textContent = currentItem.pinyin;
+    document.getElementById('word-progress-badge').textContent = `Mastery: ${currentItem.score} / 10`;
+
+    // Combine correct definition + 3 distractors
+    const allChoices = [currentItem.correct, ...currentItem.distractors];
+    const shuffledChoices = shuffleArray(allChoices);
+
+    // Render options
+    const optionsGrid = document.getElementById('options-grid');
+    optionsGrid.innerHTML = '';
+
+    shuffledChoices.forEach(choice => {
+      const btn = document.createElement('button');
+      btn.className = 'option-btn';
+      btn.textContent = choice;
+      btn.onclick = () => handleChoice(choice, btn);
+      optionsGrid.appendChild(btn);
+    });
+
+    updateOverallStats();
+  }
+
+  function handleChoice(selectedText, selectedBtn) {
+    if (isAnswerLocked) return;
+    isAnswerLocked = true;
+
+    const feedbackEl = document.getElementById('feedback');
+    const allButtons = document.querySelectorAll('.option-btn');
+
+    if (selectedText === currentItem.correct) {
+      // Correct!
+      currentItem.score += 1;
+      selectedBtn.classList.add('correct');
+      feedbackEl.textContent = '✓ Correct!';
+      feedbackEl.className = 'feedback success-text';
+
+      setTimeout(() => {
+        loadNextWord();
+      }, 700);
+    } else {
+      // Incorrect
+      currentItem.score = Math.max(0, currentItem.score - 1); // Deduct 1 penalty point
+      selectedBtn.classList.add('wrong');
+      
+      // Highlight correct button
+      allButtons.forEach(btn => {
+        if (btn.textContent === currentItem.correct) {
+          btn.classList.add('correct');
+        }
+      });
+
+      feedbackEl.textContent = '✗ Incorrect (-1 point)';
+      feedbackEl.className = 'feedback error-text';
+
+      setTimeout(() => {
+        loadNextWord();
+      }, 1600);
+    }
+  }
+
+  function updateOverallStats() {
+    const totalWords = drillData.length;
+    const masteredWords = drillData.filter(item => item.score >= 10).length;
+    
+    // Calculate overall percentage based on cumulative total score needed (10 per word)
+    const totalPointsNeeded = totalWords * 10;
+    const currentPoints = drillData.reduce((acc, curr) => acc + curr.score, 0);
+    const percentage = Math.round((currentPoints / totalPointsNeeded) * 100);
+
+    document.getElementById('words-mastered-text').textContent = `Mastered: ${masteredWords} / ${totalWords} Words`;
+    document.getElementById('overall-progress-text').textContent = `${percentage}% Complete`;
+    document.getElementById('overall-progress-bar').style.width = `${percentage}%`;
+  }
+
+  function resetToSetup() {
+    document.getElementById('drill-screen').classList.add('hidden');
+    document.getElementById('victory-screen').classList.add('hidden');
+    document.getElementById('setup-screen').classList.remove('hidden');
+  }
+</script>
+</body>
+</html>
