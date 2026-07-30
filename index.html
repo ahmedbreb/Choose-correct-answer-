@@ -33,7 +33,7 @@
     textarea:focus { outline: none; border-color: var(--primary); }
     
     .button-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-    button { flex: 1; min-width: 120px; padding: 0.85rem; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; font-size: 0.9rem; }
+    button { flex: 1; min-width: 110px; padding: 0.85rem; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; font-size: 0.9rem; }
     .btn-primary { background: var(--primary); color: white; }
     .btn-primary:hover { background: var(--primary-hover); }
     .btn-secondary { background: var(--btn-secondary-bg); color: var(--btn-secondary-text); }
@@ -63,6 +63,11 @@
     .feedback { height: 28px; text-align: center; font-weight: 600; font-size: 0.95rem; margin-bottom: 0.5rem; }
     .feedback.success-text { color: var(--success); }
     .feedback.error-text { color: var(--error); }
+
+    /* Controls Below Grid */
+    .nav-controls { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1rem; }
+    .btn-link { background: transparent; color: var(--text-muted); font-size: 0.8rem; text-decoration: underline; cursor: pointer; border: none; padding: 0; }
+    .btn-link:hover { color: var(--text-main); }
 
     /* Victory Screen */
     .victory { text-align: center; padding: 2rem 1rem; }
@@ -107,7 +112,10 @@
       <!-- 4 Option buttons dynamic insertion -->
     </div>
 
-    <button style="margin-top: 1rem; background: transparent; color: var(--text-muted); font-size: 0.8rem; width: 100%;" onclick="resetToSetup()">← Change Sentence</button>
+    <div class="nav-controls">
+      <button class="btn-link" onclick="resetToSetup()">← Change Sentence</button>
+      <button class="btn-link" onclick="resetCurrentProgress()">Reset Sentence Progress</button>
+    </div>
   </div>
 
   <!-- VICTORY SCREEN -->
@@ -121,6 +129,8 @@
 <script>
   let drillData = [];
   let currentItem = null;
+  let lastWord = null; // Track last shown word to prevent consecutive repeats
+  let currentSentenceKey = '';
   let isAnswerLocked = false;
 
   const sampleJSON = [
@@ -164,6 +174,31 @@
     document.getElementById('json-input').value = '';
   }
 
+  // Create a unique key for the sentence based on its Chinese words
+  function generateSentenceKey(parsedArray) {
+    const rawWords = parsedArray.map(item => item.word).join('_');
+    return 'drill_progress_' + rawWords;
+  }
+
+  function saveProgress() {
+    if (!currentSentenceKey) return;
+    const scoresMap = {};
+    drillData.forEach(item => {
+      scoresMap[item.word] = item.score;
+    });
+    localStorage.setItem(currentSentenceKey, JSON.stringify(scoresMap));
+  }
+
+  function loadSavedScores(key) {
+    const saved = localStorage.getItem(key);
+    if (!saved) return null;
+    try {
+      return JSON.parse(saved);
+    } catch(e) {
+      return null;
+    }
+  }
+
   function startExercise() {
     const inputStr = document.getElementById('json-input').value.trim();
     if (!inputStr) {
@@ -175,14 +210,18 @@
       const parsed = JSON.parse(inputStr);
       if (!Array.isArray(parsed) || parsed.length === 0) throw new Error("Format must be an array");
 
+      currentSentenceKey = generateSentenceKey(parsed);
+      const savedScores = loadSavedScores(currentSentenceKey);
+
       drillData = parsed.map(item => ({
         word: item.word,
         pinyin: item.pinyin,
         correct: item.correct,
         distractors: item.distractors || [],
-        score: 0 // Target is 10
+        score: (savedScores && typeof savedScores[item.word] === 'number') ? savedScores[item.word] : 0
       }));
 
+      lastWord = null; // Reset consecutive tracker
       document.getElementById('setup-screen').classList.add('hidden');
       document.getElementById('victory-screen').classList.add('hidden');
       document.getElementById('drill-screen').classList.remove('hidden');
@@ -212,14 +251,22 @@
     const unmastered = drillData.filter(item => item.score < 10);
 
     if (unmastered.length === 0) {
-      // Victory
+      // Victory: Clear saved progress for this sentence since it's 100% completed
+      localStorage.removeItem(currentSentenceKey);
       document.getElementById('drill-screen').classList.add('hidden');
       document.getElementById('victory-screen').classList.remove('hidden');
       return;
     }
 
-    // Pick a word randomly from unmastered words
-    currentItem = unmastered[Math.floor(Math.random() * unmastered.length)];
+    // Filter out last shown word if there are 2 or more unmastered words remaining
+    let candidatePool = unmastered;
+    if (unmastered.length > 1 && lastWord) {
+      candidatePool = unmastered.filter(item => item.word !== lastWord);
+    }
+
+    // Pick a word randomly from candidate pool
+    currentItem = candidatePool[Math.floor(Math.random() * candidatePool.length)];
+    lastWord = currentItem.word;
 
     // Render word info
     document.getElementById('chinese-word').textContent = currentItem.word;
@@ -255,6 +302,7 @@
     if (selectedText === currentItem.correct) {
       // Correct!
       currentItem.score += 1;
+      saveProgress(); // Auto-save to LocalStorage
       selectedBtn.classList.add('correct');
       feedbackEl.textContent = '✓ Correct!';
       feedbackEl.className = 'feedback success-text';
@@ -265,6 +313,7 @@
     } else {
       // Incorrect
       currentItem.score = Math.max(0, currentItem.score - 1); // Deduct 1 penalty point
+      saveProgress(); // Auto-save to LocalStorage
       selectedBtn.classList.add('wrong');
       
       // Highlight correct button
@@ -295,6 +344,15 @@
     document.getElementById('words-mastered-text').textContent = `Mastered: ${masteredWords} / ${totalWords} Words`;
     document.getElementById('overall-progress-text').textContent = `${percentage}% Complete`;
     document.getElementById('overall-progress-bar').style.width = `${percentage}%`;
+  }
+
+  function resetCurrentProgress() {
+    if (confirm("Are you sure you want to reset your score progress for this sentence back to 0?")) {
+      drillData.forEach(item => item.score = 0);
+      saveProgress();
+      lastWord = null;
+      loadNextWord();
+    }
   }
 
   function resetToSetup() {
