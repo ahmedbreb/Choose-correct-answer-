@@ -53,11 +53,43 @@
     .badge { display: inline-block; background: #312e81; color: #a5b4fc; font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.8rem; border: 1px solid #3730a3; }
 
     /* Grid Options */
-    .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem; }
+    .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem; min-height: 152px; }
     .option-btn { background: var(--card-inner-bg); border: 1px solid var(--border-color); color: var(--text-main); padding: 1rem; border-radius: 10px; font-weight: 500; min-height: 70px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 0.9rem; line-height: 1.3; }
     .option-btn:hover:not(:disabled) { border-color: var(--primary); color: #a5b4fc; background: #1e1b4b; }
     .option-btn.correct { background: var(--success) !important; color: white !important; border-color: var(--success) !important; }
     .option-btn.wrong { background: var(--error) !important; color: white !important; border-color: var(--error) !important; }
+
+    /* Hidden Reveal Box */
+    .reveal-box {
+      grid-column: 1 / -1;
+      background: var(--card-inner-bg);
+      border: 2px dashed var(--border-color);
+      border-radius: 10px;
+      color: var(--text-muted);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2.2rem 1rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      user-select: none;
+    }
+    .reveal-box:hover {
+      border-color: var(--primary);
+      color: var(--text-main);
+      background: #1e1b4b;
+    }
+    .reveal-box span {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin-bottom: 0.3rem;
+      color: #a5b4fc;
+    }
+    .reveal-box small {
+      font-size: 0.8rem;
+      opacity: 0.7;
+    }
 
     /* Feedback Banner */
     .feedback { height: 28px; text-align: center; font-weight: 600; font-size: 0.95rem; margin-bottom: 0.5rem; }
@@ -109,7 +141,7 @@
     <div class="feedback" id="feedback"></div>
 
     <div id="options-grid" class="options-grid">
-      <!-- 4 Option buttons dynamic insertion -->
+      <!-- Hidden reveal box or 4 options inserted dynamically -->
     </div>
 
     <div class="nav-controls">
@@ -129,9 +161,11 @@
 <script>
   let drillData = [];
   let currentItem = null;
-  let lastWord = null; // Track last shown word to prevent consecutive repeats
+  let lastWord = null;
   let currentSentenceKey = '';
   let isAnswerLocked = false;
+  let isOptionsRevealed = false;
+  let currentShuffledChoices = [];
 
   const sampleJSON = [
     {
@@ -174,7 +208,6 @@
     document.getElementById('json-input').value = '';
   }
 
-  // Create a unique key for the sentence based on its Chinese words
   function generateSentenceKey(parsedArray) {
     const rawWords = parsedArray.map(item => item.word).join('_');
     return 'drill_progress_' + rawWords;
@@ -221,7 +254,7 @@
         score: (savedScores && typeof savedScores[item.word] === 'number') ? savedScores[item.word] : 0
       }));
 
-      lastWord = null; // Reset consecutive tracker
+      lastWord = null;
       document.getElementById('setup-screen').classList.add('hidden');
       document.getElementById('victory-screen').classList.add('hidden');
       document.getElementById('drill-screen').classList.remove('hidden');
@@ -232,7 +265,6 @@
     }
   }
 
-  // Fisher-Yates Shuffle Algorithm
   function shuffleArray(array) {
     const arr = [...array];
     for (let i = arr.length - 1; i > 0; i--) {
@@ -244,53 +276,81 @@
 
   function loadNextWord() {
     isAnswerLocked = false;
+    isOptionsRevealed = false;
     document.getElementById('feedback').textContent = '';
     document.getElementById('feedback').className = 'feedback';
 
-    // Get all words with score < 10
     const unmastered = drillData.filter(item => item.score < 10);
 
     if (unmastered.length === 0) {
-      // Victory: Clear saved progress for this sentence since it's 100% completed
       localStorage.removeItem(currentSentenceKey);
       document.getElementById('drill-screen').classList.add('hidden');
       document.getElementById('victory-screen').classList.remove('hidden');
       return;
     }
 
-    // Filter out last shown word if there are 2 or more unmastered words remaining
     let candidatePool = unmastered;
     if (unmastered.length > 1 && lastWord) {
       candidatePool = unmastered.filter(item => item.word !== lastWord);
     }
 
-    // Pick a word randomly from candidate pool
     currentItem = candidatePool[Math.floor(Math.random() * candidatePool.length)];
     lastWord = currentItem.word;
 
-    // Render word info
     document.getElementById('chinese-word').textContent = currentItem.word;
     document.getElementById('pinyin').textContent = currentItem.pinyin;
     document.getElementById('word-progress-badge').textContent = `Mastery: ${currentItem.score} / 10`;
 
-    // Combine correct definition + 3 distractors
+    // Prepare choices and shuffle them
     const allChoices = [currentItem.correct, ...currentItem.distractors];
-    const shuffledChoices = shuffleArray(allChoices);
+    currentShuffledChoices = shuffleArray(allChoices);
 
-    // Render options
+    renderOptionsArea();
+    updateOverallStats();
+  }
+
+  function renderOptionsArea() {
     const optionsGrid = document.getElementById('options-grid');
     optionsGrid.innerHTML = '';
 
-    shuffledChoices.forEach(choice => {
-      const btn = document.createElement('button');
-      btn.className = 'option-btn';
-      btn.textContent = choice;
-      btn.onclick = () => handleChoice(choice, btn);
-      optionsGrid.appendChild(btn);
-    });
-
-    updateOverallStats();
+    if (!isOptionsRevealed) {
+      // Show reveal placeholder box
+      const revealBox = document.createElement('div');
+      revealBox.className = 'reveal-box';
+      revealBox.onclick = revealOptions;
+      revealBox.innerHTML = `
+        <span>👁️ Tap or Press Space to Reveal Choices</span>
+        <small>Try to recall the meaning in your head first!</small>
+      `;
+      optionsGrid.appendChild(revealBox);
+    } else {
+      // Show 4 shuffled buttons
+      currentShuffledChoices.forEach(choice => {
+        const btn = document.createElement('button');
+        btn.className = 'option-btn';
+        btn.textContent = choice;
+        btn.onclick = () => handleChoice(choice, btn);
+        optionsGrid.appendChild(btn);
+      });
+    }
   }
+
+  function revealOptions() {
+    if (isOptionsRevealed) return;
+    isOptionsRevealed = true;
+    renderOptionsArea();
+  }
+
+  // Keyboard shortcut: Spacebar triggers reveal
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') {
+      const drillScreen = document.getElementById('drill-screen');
+      if (!drillScreen.classList.contains('hidden') && !isOptionsRevealed) {
+        e.preventDefault(); // Prevent page scrolling
+        revealOptions();
+      }
+    }
+  });
 
   function handleChoice(selectedText, selectedBtn) {
     if (isAnswerLocked) return;
@@ -300,9 +360,8 @@
     const allButtons = document.querySelectorAll('.option-btn');
 
     if (selectedText === currentItem.correct) {
-      // Correct!
       currentItem.score += 1;
-      saveProgress(); // Auto-save to LocalStorage
+      saveProgress();
       selectedBtn.classList.add('correct');
       feedbackEl.textContent = '✓ Correct!';
       feedbackEl.className = 'feedback success-text';
@@ -311,12 +370,10 @@
         loadNextWord();
       }, 700);
     } else {
-      // Incorrect
-      currentItem.score = Math.max(0, currentItem.score - 1); // Deduct 1 penalty point
-      saveProgress(); // Auto-save to LocalStorage
+      currentItem.score = Math.max(0, currentItem.score - 1);
+      saveProgress();
       selectedBtn.classList.add('wrong');
       
-      // Highlight correct button
       allButtons.forEach(btn => {
         if (btn.textContent === currentItem.correct) {
           btn.classList.add('correct');
@@ -336,7 +393,6 @@
     const totalWords = drillData.length;
     const masteredWords = drillData.filter(item => item.score >= 10).length;
     
-    // Calculate overall percentage based on cumulative total score needed (10 per word)
     const totalPointsNeeded = totalWords * 10;
     const currentPoints = drillData.reduce((acc, curr) => acc + curr.score, 0);
     const percentage = Math.round((currentPoints / totalPointsNeeded) * 100);
