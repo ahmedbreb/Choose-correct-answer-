@@ -18,6 +18,13 @@
       --border-color: #334155;/* Slate 700 */
       --btn-secondary-bg: #334155;
       --btn-secondary-text: #f8fafc;
+
+      /* Tone Colors */
+      --tone-1: #38bdf8; /* Blue */
+      --tone-2: #4ade80; /* Green */
+      --tone-3: #fb923c; /* Orange */
+      --tone-4: #f87171; /* Red */
+      --tone-5: #94a3b8; /* Grey (Neutral) */
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; }
@@ -58,8 +65,9 @@
 
     /* Word Card */
     .word-card { text-align: center; background: var(--card-inner-bg); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color); margin-bottom: 1.5rem; }
-    .chinese-word { font-size: 3rem; font-weight: 800; color: var(--text-main); line-height: 1.2; margin-bottom: 0.25rem; }
-    .pinyin { font-size: 1.25rem; color: #818cf8; font-weight: 500; margin-bottom: 0.5rem; }
+    .chinese-word { font-size: 3rem; font-weight: 800; line-height: 1.2; margin-bottom: 0.25rem; letter-spacing: 2px; }
+    .pinyin { font-size: 1.25rem; color: #818cf8; font-weight: 500; margin-bottom: 0.5rem; min-height: 1.8rem; transition: opacity 0.2s ease; }
+    .pinyin.invisible { opacity: 0; pointer-events: none; }
     .badge { display: inline-block; background: #312e81; color: #a5b4fc; font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.8rem; border: 1px solid #3730a3; }
 
     /* Grid Options */
@@ -145,7 +153,7 @@
 
     <div class="word-card">
       <div id="chinese-word" class="chinese-word">--</div>
-      <div id="pinyin" class="pinyin">--</div>
+      <div id="pinyin" class="pinyin invisible">--</div>
       <span id="word-progress-badge" class="badge">Mastery: 0 / 10</span>
     </div>
 
@@ -176,6 +184,7 @@
   let currentSentenceKey = '';
   let sequentialIndex = -1;
   let isAnswerLocked = false;
+  let isPinyinRevealed = false;
   let isOptionsRevealed = false;
   let currentShuffledChoices = [];
 
@@ -187,10 +196,10 @@
       "distractors": ["with extreme speed", "with complete focus", "with maximum caution"]
     },
     {
-      "word": "奔跑",
-      "pinyin": "bēn pǎo",
-      "correct": "to run quickly / to sprint",
-      "distractors": ["to walk hurriedly", "to jump repeatedly", "to rush forward aimlessly"]
+      "word": "奔跑的",
+      "pinyin": "bēn pǎo de",
+      "correct": "running / sprinting",
+      "distractors": ["walking hurriedly", "jumping repeatedly", "rushing forward aimlessly"]
     },
     {
       "word": "同时",
@@ -199,8 +208,8 @@
       "distractors": ["immediately after", "in a short period", "from time to time"]
     },
     {
-      "word": "精细",
-      "pinyin": "jīng xì",
+      "word": "精细的",
+      "pinyin": "jīng xì de",
       "correct": "fine / delicate / detailed",
       "distractors": ["bright and colorful", "complex and difficult", "neat and organized"]
     },
@@ -211,6 +220,44 @@
       "distractors": ["secret riddle", "whispered rumor", "ancient proverb"]
     }
   ];
+
+  /* --- TONE COLOR LOGIC --- */
+  function getToneFromPinyin(syllable) {
+    if (!syllable) return 5;
+    if (/[āēīōūǖĀĒĪŌŪǕ1]/.test(syllable)) return 1;
+    if (/[áéíóúǘÁÉÍÓÚǗ2]/.test(syllable)) return 2;
+    if (/[ǎěǐǒǔǚǍĚǏǑǓǙ3]/.test(syllable)) return 3;
+    if (/[àèìòùǜÀÈÌÒÙǛ4]/.test(syllable)) return 4;
+    return 5; // Neutral / light tone
+  }
+
+  function renderToneColoredWord(word, pinyinStr) {
+    const toneColors = {
+      1: 'var(--tone-1)', // Blue
+      2: 'var(--tone-2)', // Green
+      3: 'var(--tone-3)', // Orange
+      4: 'var(--tone-4)', // Red
+      5: 'var(--tone-5)'  // Grey
+    };
+
+    const syllables = pinyinStr.trim().split(/\s+/);
+    const chars = Array.from(word); // Correctly handles multi-byte UTF-16 characters
+
+    let html = '';
+    chars.forEach((char, index) => {
+      // Check if character is Chinese
+      if (/[\u4e00-\u9fa5]/.test(char)) {
+        const syllable = syllables[index] || '';
+        const tone = getToneFromPinyin(syllable);
+        const color = toneColors[tone] || toneColors[5];
+        html += `<span style="color: ${color};">${char}</span>`;
+      } else {
+        html += `<span style="color: var(--text-main);">${char}</span>`;
+      }
+    });
+
+    return html;
+  }
 
   function loadSampleData() {
     document.getElementById('json-input').value = JSON.stringify(sampleJSON, null, 2);
@@ -267,7 +314,7 @@
       }));
 
       lastWord = null;
-      sequentialIndex = -1; // Reset sequential tracker
+      sequentialIndex = -1;
       document.getElementById('setup-screen').classList.add('hidden');
       document.getElementById('victory-screen').classList.add('hidden');
       document.getElementById('drill-screen').classList.remove('hidden');
@@ -289,9 +336,15 @@
 
   function loadNextWord() {
     isAnswerLocked = false;
+    isPinyinRevealed = false;
     isOptionsRevealed = false;
+
     document.getElementById('feedback').textContent = '';
     document.getElementById('feedback').className = 'feedback';
+
+    // Hide pinyin initially
+    const pinyinEl = document.getElementById('pinyin');
+    pinyinEl.classList.add('invisible');
 
     const unmastered = drillData.filter(item => item.score < 10);
 
@@ -305,7 +358,6 @@
     const isSequential = document.getElementById('order-toggle').checked;
 
     if (isSequential) {
-      // Find the next unmastered word in sentence order
       let nextIdx = (sequentialIndex + 1) % drillData.length;
       let count = 0;
       while (drillData[nextIdx].score >= 10 && count < drillData.length) {
@@ -315,7 +367,6 @@
       sequentialIndex = nextIdx;
       currentItem = drillData[sequentialIndex];
     } else {
-      // Random mode (prevents back-to-back repeats)
       let candidatePool = unmastered;
       if (unmastered.length > 1 && lastWord) {
         candidatePool = unmastered.filter(item => item.word !== lastWord);
@@ -326,8 +377,9 @@
 
     lastWord = currentItem.word;
 
-    document.getElementById('chinese-word').textContent = currentItem.word;
-    document.getElementById('pinyin').textContent = currentItem.pinyin;
+    // Render tone-colored Chinese word and set pinyin text
+    document.getElementById('chinese-word').innerHTML = renderToneColoredWord(currentItem.word, currentItem.pinyin);
+    pinyinEl.textContent = currentItem.pinyin;
     document.getElementById('word-progress-badge').textContent = `Mastery: ${currentItem.score} / 10`;
 
     // Prepare choices and shuffle them
@@ -342,16 +394,28 @@
     const optionsGrid = document.getElementById('options-grid');
     optionsGrid.innerHTML = '';
 
-    if (!isOptionsRevealed) {
+    if (!isPinyinRevealed) {
+      // Step 1: Prompt to reveal Pinyin
       const revealBox = document.createElement('div');
       revealBox.className = 'reveal-box';
-      revealBox.onclick = revealOptions;
+      revealBox.onclick = advanceRevealStep;
+      revealBox.innerHTML = `
+        <span>👁️ Tap or Press Space to Reveal Pinyin</span>
+        <small>Try to recall the pronunciation and meaning in your head!</small>
+      `;
+      optionsGrid.appendChild(revealBox);
+    } else if (!isOptionsRevealed) {
+      // Step 2: Prompt to reveal Options
+      const revealBox = document.createElement('div');
+      revealBox.className = 'reveal-box';
+      revealBox.onclick = advanceRevealStep;
       revealBox.innerHTML = `
         <span>👁️ Tap or Press Space to Reveal Choices</span>
-        <small>Try to recall the meaning in your head first!</small>
+        <small>Try to recall the meaning before viewing choices!</small>
       `;
       optionsGrid.appendChild(revealBox);
     } else {
+      // Step 3: Display options
       currentShuffledChoices.forEach(choice => {
         const btn = document.createElement('button');
         btn.className = 'option-btn';
@@ -362,19 +426,24 @@
     }
   }
 
-  function revealOptions() {
-    if (isOptionsRevealed) return;
-    isOptionsRevealed = true;
-    renderOptionsArea();
+  function advanceRevealStep() {
+    if (!isPinyinRevealed) {
+      isPinyinRevealed = true;
+      document.getElementById('pinyin').classList.remove('invisible');
+      renderOptionsArea();
+    } else if (!isOptionsRevealed) {
+      isOptionsRevealed = true;
+      renderOptionsArea();
+    }
   }
 
-  // Keyboard shortcut: Spacebar triggers reveal
+  // Keyboard shortcut: Spacebar triggers the sequential reveal steps
   document.addEventListener('keydown', (e) => {
     if (e.code === 'Space') {
       const drillScreen = document.getElementById('drill-screen');
-      if (!drillScreen.classList.contains('hidden') && !isOptionsRevealed) {
+      if (!drillScreen.classList.contains('hidden') && (!isPinyinRevealed || !isOptionsRevealed)) {
         e.preventDefault(); // Prevent page scrolling
-        revealOptions();
+        advanceRevealStep();
       }
     }
   });
