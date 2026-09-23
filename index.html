@@ -190,10 +190,10 @@
 
   const sampleJSON = [
     {
-      "word": "全力",
-      "pinyin": "quán lì",
-      "correct": "with all one's strength / full force",
-      "distractors": ["with extreme speed", "with complete focus", "with maximum caution"]
+      "word": "中国人",
+      "pinyin": "zhōng guó rén",
+      "correct": "Chinese person / Chinese people",
+      "distractors": ["Chinese language", "Chinese culture", "China history"]
     },
     {
       "word": "奔跑的",
@@ -221,14 +221,29 @@
     }
   ];
 
-  /* --- TONE COLOR LOGIC --- */
-  function getToneFromPinyin(syllable) {
+  /* --- ENHANCED TONE COLOR ENGINE --- */
+  function getToneFromSyllable(syllable) {
     if (!syllable) return 5;
-    if (/[āēīōūǖĀĒĪŌŪǕ1]/.test(syllable)) return 1;
-    if (/[áéíóúǘÁÉÍÓÚǗ2]/.test(syllable)) return 2;
-    if (/[ǎěǐǒǔǚǍĚǏǑǓǙ3]/.test(syllable)) return 3;
-    if (/[àèìòùǜÀÈÌÒÙǛ4]/.test(syllable)) return 4;
-    return 5; // Neutral / light tone
+    const s = syllable.normalize('NFC');
+    
+    if (/[āēīōūǖĀĒĪŌŪǕ1]/.test(s)) return 1;
+    if (/[áéíóúǘÁÉÍÓÚǗ2]/.test(s)) return 2;
+    if (/[ǎěǐǒǔǚǍĚǏǑǓǙ3]/.test(s)) return 3;
+    if (/[àèìòùǜÀÈÌÒÙǛ4]/.test(s)) return 4;
+    return 5; // Light / neutral tone
+  }
+
+  function extractSyllables(pinyinStr) {
+    if (!pinyinStr) return [];
+    const normalized = pinyinStr.normalize('NFC').trim();
+    
+    const spaceTokens = normalized.split(/\s+/);
+    
+    // Regex matching individual Pinyin syllables even inside compounds (e.g. "zhōngguórén")
+    const pinyinSyllableRegex = /(?:zh|ch|sh|[bpmfdtnlgkhjqxrzcsyw])?(?:[āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜaeiouüv]+(?:ng|n|r)?\d?)/gi;
+    const extractedMatches = normalized.match(pinyinSyllableRegex) || [];
+    
+    return { spaceTokens, extractedMatches };
   }
 
   function renderToneColoredWord(word, pinyinStr) {
@@ -240,17 +255,24 @@
       5: 'var(--tone-5)'  // Grey
     };
 
-    const syllables = pinyinStr.trim().split(/\s+/);
-    const chars = Array.from(word); // Correctly handles multi-byte UTF-16 characters
+    const chars = Array.from(word);
+    const hanziChars = chars.filter(c => /[\u4e00-\u9fa5]/.test(c));
+    const { spaceTokens, extractedMatches } = extractSyllables(pinyinStr);
+
+    // If space-separated tokens match Chinese character count, use space tokens.
+    // Otherwise, fall back to extracted compound syllable matching.
+    let syllables = (spaceTokens.length === hanziChars.length) ? spaceTokens : extractedMatches;
 
     let html = '';
-    chars.forEach((char, index) => {
-      // Check if character is Chinese
+    let hanziIndex = 0;
+
+    chars.forEach((char) => {
       if (/[\u4e00-\u9fa5]/.test(char)) {
-        const syllable = syllables[index] || '';
-        const tone = getToneFromPinyin(syllable);
+        const syllable = syllables[hanziIndex] || '';
+        const tone = getToneFromSyllable(syllable);
         const color = toneColors[tone] || toneColors[5];
         html += `<span style="color: ${color};">${char}</span>`;
+        hanziIndex++;
       } else {
         html += `<span style="color: var(--text-main);">${char}</span>`;
       }
@@ -395,7 +417,6 @@
     optionsGrid.innerHTML = '';
 
     if (!isPinyinRevealed) {
-      // Step 1: Prompt to reveal Pinyin
       const revealBox = document.createElement('div');
       revealBox.className = 'reveal-box';
       revealBox.onclick = advanceRevealStep;
@@ -405,7 +426,6 @@
       `;
       optionsGrid.appendChild(revealBox);
     } else if (!isOptionsRevealed) {
-      // Step 2: Prompt to reveal Options
       const revealBox = document.createElement('div');
       revealBox.className = 'reveal-box';
       revealBox.onclick = advanceRevealStep;
@@ -415,7 +435,6 @@
       `;
       optionsGrid.appendChild(revealBox);
     } else {
-      // Step 3: Display options
       currentShuffledChoices.forEach(choice => {
         const btn = document.createElement('button');
         btn.className = 'option-btn';
@@ -437,12 +456,11 @@
     }
   }
 
-  // Keyboard shortcut: Spacebar triggers the sequential reveal steps
   document.addEventListener('keydown', (e) => {
     if (e.code === 'Space') {
       const drillScreen = document.getElementById('drill-screen');
       if (!drillScreen.classList.contains('hidden') && (!isPinyinRevealed || !isOptionsRevealed)) {
-        e.preventDefault(); // Prevent page scrolling
+        e.preventDefault();
         advanceRevealStep();
       }
     }
