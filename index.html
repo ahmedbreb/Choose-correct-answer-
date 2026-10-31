@@ -137,7 +137,7 @@
     .feedback.error-text { color: var(--error); }
 
     /* Controls Below Grid */
-    .nav-controls { display: flex; justify-content: space-between; gap: 1rem; margin-top: 0.75rem; }
+    .nav-controls { display: flex; justify-content: space-between; gap: 1rem; margin-top: 0.75rem; flex-wrap: wrap; }
     .btn-link { background: transparent; color: var(--text-muted); font-size: 0.8rem; text-decoration: underline; cursor: pointer; border: none; padding: 0; }
     .btn-link:hover { color: var(--text-main); }
 
@@ -215,6 +215,7 @@
 
     <div class="nav-controls">
       <button class="btn-link" onclick="resetToSetup()">← Change Sentence</button>
+      <button class="btn-link" onclick="jumpToFirstWord()">⏮️ Jump to First Word</button>
       <button class="btn-link" onclick="resetCurrentProgress()">Reset Sentence Progress</button>
     </div>
   </div>
@@ -283,6 +284,12 @@
     return document.getElementById('fast-review-drill-toggle').checked;
   }
 
+  /* --- JUMP TO FIRST WORD --- */
+  function jumpToFirstWord() {
+    sequentialIndex = -1; // Reset so next sequential call picks index 0
+    loadNextWord();
+  }
+
   /* --- ENHANCED TONE COLOR ENGINE WITH NUMBER ALIGNMENT --- */
   function getToneFromSyllable(syllable) {
     if (!syllable) return 5;
@@ -316,7 +323,6 @@
     const chars = Array.from(word);
     const charSlots = chars.filter(c => /[\u4e00-\u9fa5a-zA-Z0-9]/.test(c));
 
-    // Group multi-digit numbers if present
     const groupedUnits = [];
     for (let i = 0; i < chars.length; i++) {
       const c = chars[i];
@@ -370,7 +376,7 @@
           slotIndex++;
         } else if (/[0-9a-zA-Z]/.test(char)) {
           html += `<span style="color: var(--text-main);">${char}</span>`;
-          slotIndex++; // Digit/Letter takes 1 Pinyin slot
+          slotIndex++;
         } else {
           html += `<span style="color: var(--text-main);">${char}</span>`;
         }
@@ -544,16 +550,17 @@
       revealBox.className = 'reveal-box';
       revealBox.onclick = advanceRevealStep;
       revealBox.innerHTML = `
-        <span>👁️ Tap or Press Space to Reveal Pinyin</span>
-        <small>Try to recall pronunciation and tone in your head!</small>
+        <span>👁️ Tap or Press Space to Reveal ${isFastReviewMode() ? 'Everything' : 'Pinyin'}</span>
+        <small>${isFastReviewMode() ? 'Instant reveal mode active' : 'Try to recall pronunciation and tone in your head!'}</small>
       `;
       optionsGrid.appendChild(revealBox);
     } else if (!isOptionsRevealed) {
+      // Normal mode secondary step
       const revealBox = document.createElement('div');
       revealBox.className = 'reveal-box';
       revealBox.onclick = advanceRevealStep;
       revealBox.innerHTML = `
-        <span>👁️ Tap or Press Space to Reveal ${isFastReviewMode() ? 'Definition' : 'Choices'}</span>
+        <span>👁️ Tap or Press Space to Reveal Choices</span>
         <small>Try to recall meaning before viewing!</small>
       `;
       optionsGrid.appendChild(revealBox);
@@ -572,8 +579,17 @@
     if (!isPinyinRevealed) {
       isPinyinRevealed = true;
       document.getElementById('pinyin').classList.remove('invisible');
-      renderOptionsArea();
+      
+      if (isFastReviewMode()) {
+        // Fast Review Mode: Reveal Pinyin AND Answers simultaneously in one step!
+        isOptionsRevealed = true;
+        prepareAndRenderChoices();
+      } else {
+        // Normal Mode: Stop here for step 2
+        renderOptionsArea();
+      }
     } else if (!isOptionsRevealed) {
+      // Normal mode step 2
       isOptionsRevealed = true;
       prepareAndRenderChoices();
     } else if (isFastReviewMode() && !isAnswerLocked) {
