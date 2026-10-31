@@ -34,7 +34,8 @@
     .hidden { display: none !important; }
 
     /* Top Controls Bar inside Drill */
-    .top-drill-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+    .top-drill-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem; }
+    .drill-toggles-wrapper { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
     
     /* Subtle Toggle Switch / Pill */
     .fast-review-pill {
@@ -165,6 +166,14 @@
         </label>
       </div>
 
+      <div class="toggle-container" id="auto-show-setup-container">
+        <span class="toggle-label">🚀 Auto-Show Pinyin & Answer (Instant Browse)</span>
+        <label class="switch">
+          <input type="checkbox" id="auto-show-setup-toggle" onchange="syncAutoShowToggle('setup')">
+          <span class="slider"></span>
+        </label>
+      </div>
+
       <div class="toggle-container">
         <span class="toggle-label">Practice in Sentence Order</span>
         <label class="switch">
@@ -187,10 +196,16 @@
       <div class="stats-header" style="margin-bottom:0;">
         <span id="words-mastered-text">Mastered: 0 / 0</span>
       </div>
-      <label class="fast-review-pill" title="Toggle showing only the correct definition">
-        <span>⚡ Fast Review</span>
-        <input type="checkbox" id="fast-review-drill-toggle" checked onchange="syncFastReviewToggle('drill')">
-      </label>
+      <div class="drill-toggles-wrapper">
+        <label class="fast-review-pill" title="Toggle showing correct definition">
+          <span>⚡ Fast Review</span>
+          <input type="checkbox" id="fast-review-drill-toggle" checked onchange="syncFastReviewToggle('drill')">
+        </label>
+        <label class="fast-review-pill" id="auto-show-drill-pill" title="Toggle instant auto-show">
+          <span>🚀 Auto-Show</span>
+          <input type="checkbox" id="auto-show-drill-toggle" onchange="syncAutoShowToggle('drill')">
+        </label>
+      </div>
     </div>
 
     <div class="stats-header">
@@ -215,7 +230,7 @@
 
     <div class="nav-controls">
       <button class="btn-link" onclick="resetToSetup()">← Change Sentence</button>
-      <button class="btn-link" onclick="jumpToFirstWord()">⏮️ Jump to First Word</button>
+      <button class="btn-link" onclick="jumpToFirstWord()">Jump to First Word</button>
       <button class="btn-link" onclick="resetCurrentProgress()">Reset Sentence Progress</button>
     </div>
   </div>
@@ -266,7 +281,7 @@
     }
   ];
 
-  /* --- FAST REVIEW TOGGLE SYNC --- */
+  /* --- TOGGLE SYNC HANDLERS --- */
   function syncFastReviewToggle(source) {
     const setupVal = document.getElementById('fast-review-setup-toggle').checked;
     const drillVal = document.getElementById('fast-review-drill-toggle').checked;
@@ -275,8 +290,43 @@
     document.getElementById('fast-review-setup-toggle').checked = newVal;
     document.getElementById('fast-review-drill-toggle').checked = newVal;
 
-    if (!document.getElementById('drill-screen').classList.contains('hidden') && isOptionsRevealed) {
-      prepareAndRenderChoices();
+    const autoShowContainer = document.getElementById('auto-show-setup-container');
+    const autoShowPill = document.getElementById('auto-show-drill-pill');
+    
+    if (!newVal) {
+      // If Fast Review is turned off, force Auto-Show off as well
+      document.getElementById('auto-show-setup-toggle').checked = false;
+      document.getElementById('auto-show-drill-toggle').checked = false;
+      autoShowContainer.style.display = 'none';
+      autoShowPill.style.display = 'none';
+    } else {
+      autoShowContainer.style.display = 'flex';
+      autoShowPill.style.display = 'inline-flex';
+    }
+
+    if (!document.getElementById('drill-screen').classList.contains('hidden')) {
+      if (isAutoShowMode()) {
+        revealEverythingInstantly();
+      } else {
+        loadNextWord();
+      }
+    }
+  }
+
+  function syncAutoShowToggle(source) {
+    const setupVal = document.getElementById('auto-show-setup-toggle').checked;
+    const drillVal = document.getElementById('auto-show-drill-toggle').checked;
+    const newVal = source === 'setup' ? setupVal : drillVal;
+
+    document.getElementById('auto-show-setup-toggle').checked = newVal;
+    document.getElementById('auto-show-drill-toggle').checked = newVal;
+
+    if (!document.getElementById('drill-screen').classList.contains('hidden')) {
+      if (newVal) {
+        revealEverythingInstantly();
+      } else {
+        loadNextWord();
+      }
     }
   }
 
@@ -284,9 +334,20 @@
     return document.getElementById('fast-review-drill-toggle').checked;
   }
 
+  function isAutoShowMode() {
+    return isFastReviewMode() && document.getElementById('auto-show-drill-toggle').checked;
+  }
+
+  function revealEverythingInstantly() {
+    isPinyinRevealed = true;
+    isOptionsRevealed = true;
+    document.getElementById('pinyin').classList.remove('invisible');
+    prepareAndRenderChoices();
+  }
+
   /* --- JUMP TO FIRST WORD --- */
   function jumpToFirstWord() {
-    sequentialIndex = -1; // Reset so next sequential call picks index 0
+    sequentialIndex = -1;
     loadNextWord();
   }
 
@@ -299,16 +360,16 @@
     if (/[áéíóúǘÁÉÍÓÚǗ2]/.test(s)) return 2;
     if (/[ǎěǐǒǔǚǍĚǏǑǓǙ3]/.test(s)) return 3;
     if (/[àèìòùǜÀÈÌÒÙǛ4]/.test(s)) return 4;
-    return 5; // Neutral tone
+    return 5;
   }
 
   function renderToneColoredWord(word, pinyinStr) {
     const toneColors = {
-      1: 'var(--tone-1)', // Blue
-      2: 'var(--tone-2)', // Green
-      3: 'var(--tone-3)', // Orange
-      4: 'var(--tone-4)', // Red
-      5: 'var(--tone-5)'  // Grey
+      1: 'var(--tone-1)',
+      2: 'var(--tone-2)',
+      3: 'var(--tone-3)',
+      4: 'var(--tone-4)',
+      5: 'var(--tone-5)'
     };
 
     if (!word) return '';
@@ -460,6 +521,9 @@
       document.getElementById('victory-screen').classList.add('hidden');
       document.getElementById('drill-screen').classList.remove('hidden');
 
+      // Initialize visibility of Auto-Show toggle based on Fast Review state
+      syncFastReviewToggle('drill');
+
       loadNextWord();
     } catch (err) {
       alert("Invalid JSON structure! Please make sure your output matches the prompt standard.");
@@ -521,7 +585,11 @@
     pinyinEl.textContent = currentItem.pinyin;
     document.getElementById('word-progress-badge').textContent = `Mastery: ${currentItem.score} / 10`;
 
-    renderOptionsArea();
+    if (isAutoShowMode()) {
+      revealEverythingInstantly();
+    } else {
+      renderOptionsArea();
+    }
     updateOverallStats();
   }
 
@@ -550,12 +618,11 @@
       revealBox.className = 'reveal-box';
       revealBox.onclick = advanceRevealStep;
       revealBox.innerHTML = `
-        <span>👁️ Tap or Press Space to Reveal ${isFastReviewMode() ? 'Everything' : 'Pinyin'}</span>
-        <small>${isFastReviewMode() ? 'Instant reveal mode active' : 'Try to recall pronunciation and tone in your head!'}</small>
+        <span>👁️ Tap or Press Space to Reveal Pinyin</span>
+        <small>Try to recall pronunciation and tone in your head!</small>
       `;
       optionsGrid.appendChild(revealBox);
     } else if (!isOptionsRevealed) {
-      // Normal mode secondary step
       const revealBox = document.createElement('div');
       revealBox.className = 'reveal-box';
       revealBox.onclick = advanceRevealStep;
@@ -576,25 +643,22 @@
   }
 
   function advanceRevealStep() {
+    if (isAutoShowMode()) {
+      // In Auto-Show mode, hitting space submits/advances immediately
+      if (!isAnswerLocked) {
+        const singleBtn = document.querySelector('.option-btn');
+        if (singleBtn) handleChoice(currentItem.correct, singleBtn);
+      }
+      return;
+    }
+
     if (!isPinyinRevealed) {
       isPinyinRevealed = true;
       document.getElementById('pinyin').classList.remove('invisible');
-      
-      if (isFastReviewMode()) {
-        // Fast Review Mode: Reveal Pinyin AND Answers simultaneously in one step!
-        isOptionsRevealed = true;
-        prepareAndRenderChoices();
-      } else {
-        // Normal Mode: Stop here for step 2
-        renderOptionsArea();
-      }
+      renderOptionsArea();
     } else if (!isOptionsRevealed) {
-      // Normal mode step 2
       isOptionsRevealed = true;
       prepareAndRenderChoices();
-    } else if (isFastReviewMode() && !isAnswerLocked) {
-      const singleBtn = document.querySelector('.option-btn');
-      if (singleBtn) handleChoice(currentItem.correct, singleBtn);
     }
   }
 
@@ -624,7 +688,7 @@
 
       setTimeout(() => {
         loadNextWord();
-      }, isFastReviewMode() ? 400 : 700);
+      }, isAutoShowMode() ? 300 : (isFastReviewMode() ? 500 : 700));
     } else {
       currentItem.score = Math.max(0, currentItem.score - 1);
       saveProgress();
